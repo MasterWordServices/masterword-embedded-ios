@@ -10,24 +10,23 @@ let package = Package(
     name: "MasterWordEmbedded",
     platforms: [.iOS(.v17)],
     products: [
-        .library(name: "MasterWordEmbedded", targets: ["MasterWordEmbedded"]),
+        .library(name: "MasterWordEmbedded", targets: ["MasterWordEmbedded", "MasterWordEmbeddedDeps"]),
     ],
     dependencies: [
         .package(url: "https://github.com/twilio/twilio-video-ios", from: "5.11.3"),
     ],
     targets: [
         .binaryTarget(
-            name: "MasterWordEmbeddedCore",
-            url: "https://github.com/MasterWordServices/masterword-embedded-ios/releases/download/v0.1.0/MasterWordEmbedded.xcframework.zip",
-            checksum: "c575afe6b0919d6714e860ab9e3533567ca7dc5bf16cd2c37b48f75e48bb58b6"
+            name: "MasterWordEmbedded",
+            url: "https://github.com/MasterWordServices/masterword-embedded-ios/releases/download/v0.1.1/MasterWordEmbedded.xcframework.zip",
+            checksum: "0519af705cbec634765c46a7dc57dbe91fbd2a111d02ee7acc01a0b7224810f6"
         ),
         .target(
-            name: "MasterWordEmbedded",
+            name: "MasterWordEmbeddedDeps",
             dependencies: [
-                "MasterWordEmbeddedCore",
                 .product(name: "TwilioVideo", package: "twilio-video-ios"),
             ],
-            path: "Sources/MasterWordEmbedded"
+            path: "Sources/MasterWordEmbeddedDeps"
         ),
     ]
 )
