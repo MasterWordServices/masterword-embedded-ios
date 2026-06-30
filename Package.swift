@@ -18,8 +18,8 @@ let package = Package(
     targets: [
         .binaryTarget(
             name: "MasterWordEmbedded",
-            url: "https://github.com/MasterWordServices/masterword-embedded-ios/releases/download/v0.1.3/MasterWordEmbedded.xcframework.zip",
-            checksum: "cf33b55afdc25fe3a69aa46af329c9ba0c547ac27b6250efca08c71d68131154"
+            url: "https://github.com/MasterWordServices/masterword-embedded-ios/releases/download/v1.0.0/MasterWordEmbedded.xcframework.zip",
+            checksum: "1ee6a452a09395fd181fd260cb32091b1c344f14febb8fe487e21b5dccd6cd15"
         ),
         .target(
             name: "MasterWordEmbeddedDeps",
