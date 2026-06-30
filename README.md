@@ -153,12 +153,12 @@ masterWord.logout()
 
 - If the user is not signed in, the login card appears automatically. Once they sign in, the call proceeds without requiring a second tap.
 - The `contextHandoff` string is sent to the interpreter the moment they connect, so they arrive with full context.
-- The `language` parameter is optional. If provided, the SDK validates it against the languages available to the user before placing the call.
+- The SDK validates `language` against the languages available to the user before placing the call.
 
 ```swift
 await masterWord.requestInterpreter(
     contextHandoff: "User asked about billing dispute on account #4821. AI could not resolve. Escalating.",
-    language: selectedLanguage  // UserLanguage from fetchAvailableLanguages(), or nil
+    language: selectedLanguage  // UserLanguage from fetchAvailableLanguages()
 )
 ```
 
@@ -195,17 +195,18 @@ availableLanguages = languages
 
 // Present a picker using engName / nativeName
 Picker("Language", selection: $selectedLanguage) {
-    Text("No preference").tag(Optional<UserLanguage>.none)
     ForEach(availableLanguages, id: \.self) { language in
         Text(language.engName).tag(Optional(language))
     }
 }
 
-// Pass the selection when requesting
-await masterWord.requestInterpreter(
-    contextHandoff: summary,
-    language: selectedLanguage
-)
+// Pass the selection when requesting — disable the button until a language is chosen
+if let language = selectedLanguage {
+    await masterWord.requestInterpreter(
+        contextHandoff: summary,
+        language: language
+    )
+}
 ```
 
 If the selected language is no longer available at call time, `requestError` is set to `"Sorry, this language isn't available."` and no call is placed.
@@ -226,12 +227,42 @@ In production the host app typically knows the session language from its AI cont
 
 // Called by your AI pipeline when it decides to escalate
 func escalateToInterpreter(detectedLanguage: String, summary: String) async {
-    let language = availableLanguages.first {
+    guard let language = availableLanguages.first(where: {
         $0.engName.localizedCaseInsensitiveCompare(detectedLanguage) == .orderedSame
-    }
+    }) else { return }
     await masterWord.requestInterpreter(contextHandoff: summary, language: language)
 }
 ```
+
+### Gating the escalation button on language availability
+
+Only show the "Request Human" button when a live interpreter is actually available for the session language. Resolve the matching `UserLanguage` as soon as the AI detects the language, and use its presence to drive button visibility:
+
+```swift
+@State private var availableLanguages: [UserLanguage] = []
+@State private var sessionLanguage: UserLanguage? = nil  // set when AI detects the language
+
+// Resolve once the AI identifies the language
+func onLanguageDetected(_ detectedLanguage: String) {
+    sessionLanguage = availableLanguages.first {
+        $0.engName.localizedCaseInsensitiveCompare(detectedLanguage) == .orderedSame
+    }
+}
+
+// Only render the button when the language is available
+if let language = sessionLanguage {
+    Button("Request Human Interpreter") {
+        Task {
+            await masterWord.requestInterpreter(
+                contextHandoff: aiGeneratedSummary,
+                language: language
+            )
+        }
+    }
+}
+```
+
+If `sessionLanguage` is nil — because the detected language has no interpreter coverage — the button simply does not appear. No error handling needed.
 
 The SDK handles everything else automatically:
 
@@ -260,7 +291,7 @@ Add a debug button to your app that fetches the language list and filters for th
 Button("Test Call") {
     Task {
         let languages = (try? await masterWord.fetchAvailableLanguages()) ?? []
-        let zulu = languages.first { $0.engName == "Zulu (test)" }
+        guard let zulu = languages.first(where: { $0.engName == "Zulu (test)" }) else { return }
         await masterWord.requestInterpreter(
             contextHandoff: "Test call — SDK integration check.",
             language: zulu
