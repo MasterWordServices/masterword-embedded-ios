@@ -245,12 +245,6 @@ The SDK handles everything else automatically:
 
 ---
 
-## Example App
-
-A fully functional example app is included in the `MasterWordEmbeddedExample/` directory. Open `MasterWordEmbeddedExample/MasterWordEmbeddedExample.xcodeproj` in Xcode to see a working integration covering authentication, language selection, context handoff, and interpreter requests.
-
----
-
 ## Testing
 
 MasterWord will provide you with demo account credentials. Sign in with those credentials and use the **Zulu (test)** language to place a test call — a MasterWord team member will be standing by to answer as the interpreter.
