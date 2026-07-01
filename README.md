@@ -96,7 +96,11 @@ import MasterWordEmbedded
 
 @main
 struct YourApp: App {
+    #if DEBUG
+    @StateObject private var masterWord = MasterWordSDK(testLanguagesEnabled: true)
+    #else
     @StateObject private var masterWord = MasterWordSDK()
+    #endif
 
     var body: some Scene {
         WindowGroup {
@@ -282,7 +286,7 @@ MasterWord will provide you with demo account credentials. Sign in with those cr
 
 Zulu test calls do not go through the live interpreter queue and will not generate a bill.
 
-**The Zulu test language is only available in debug builds.** The SDK injects it automatically when your app is built with the `DEBUG` flag (the default for Xcode's Debug scheme). It will not appear in production builds.
+**The Zulu test language requires `testLanguagesEnabled: true` in the SDK initializer.** Because the SDK is distributed as a pre-built binary, it cannot detect your app's build configuration at runtime. Pass the flag explicitly in your debug initializer (see Setup above) and it will never reach production.
 
 Add a debug button to your app that fetches the language list and filters for the test entry:
 
