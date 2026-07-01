@@ -35,6 +35,14 @@ targets: [
 
 ---
 
+## Bundled dependencies
+
+The SDK binary includes **SignalRClient** and **Lottie** statically linked. Do not add either of these as separate dependencies in your own project — duplicate symbols will cause a linker error.
+
+**TwilioVideo** is declared separately in the SDK's `Package.swift` and will be pulled in automatically when you add the package. Do not add it manually.
+
+---
+
 ## Privacy — Face ID Usage
 
 The SDK uses Face ID to silently restore authenticated sessions on relaunch. Your app's `Info.plist` must include `NSFaceIDUsageDescription` or the app will crash at launch.
@@ -165,6 +173,33 @@ await masterWord.requestInterpreter(
     language: selectedLanguage  // UserLanguage from fetchAvailableLanguages()
 )
 ```
+
+### Call state
+
+`callState` exposes the full call lifecycle so you can build your own connecting/waiting UI instead of (or alongside) the SDK's default sheet:
+
+| State | Meaning |
+|---|---|
+| `.idle` | No call in progress |
+| `.connecting` | Authenticating and opening the SignalR hub |
+| `.searching` | Waiting for an available interpreter |
+| `.ringing` | Interpreter found, call ringing |
+| `.accepted` | Interpreter accepted, connecting Twilio room |
+| `.active` | Video session live |
+| `.ending` | Hang-up sent, waiting for confirmation |
+
+```swift
+.onChange(of: masterWord.callState) { _, state in
+    switch state {
+    case .idle:        hideCustomConnectingUI()
+    case .searching:   showWaitingAnimation()
+    case .active:      hideCustomConnectingUI() // SDK sheet takes over
+    default:           break
+    }
+}
+```
+
+The `masterWordSheet` modifier handles the active call UI automatically. Use `callState` if you want to drive your own connecting/loading experience before an interpreter connects.
 
 Observe `requestError` to surface failures in your own UI:
 
