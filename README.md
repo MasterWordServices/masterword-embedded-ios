@@ -181,7 +181,7 @@ await masterWord.requestInterpreter(
 | Type | Session | Active call UI |
 |---|---|---|
 | `.vri` | Two-way video via Twilio room | Full-screen video, PiP support, chat overlay, camera-off placeholders |
-| `.opi` | Audio-only voice call | Themed audio layout with always-visible chat and minimize |
+| `.opi` | Audio-only voice call | Themed audio layout with always-visible chat, speaker toggle, and minimize |
 
 OPI calls integrate with **CallKit** when your app declares the **Voice over IP** background mode, so the call shows in the system call UI and survives backgrounding like a phone call. Without the VoIP entitlement the SDK automatically falls back to a direct in-app audio connection — no configuration required, but the call will not appear in the system call UI.
 
