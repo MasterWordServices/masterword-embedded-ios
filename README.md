@@ -6,7 +6,7 @@ Embed live interpreter access into your iOS app. The SDK handles authentication,
 
 ## Requirements
 
-- iOS 16.0+
+- iOS 17.0+
 - Xcode 16.0+
 - Swift 6.0+
 
@@ -39,7 +39,7 @@ targets: [
 
 The SDK binary includes **SignalRClient** and **Lottie** statically linked. Do not add either of these as separate dependencies in your own project — duplicate symbols will cause a linker error.
 
-**TwilioVideo** is declared separately in the SDK's `Package.swift` and will be pulled in automatically when you add the package. Do not add it manually.
+**TwilioVideo** and **TwilioVoice** are declared separately in the SDK's `Package.swift` and will be pulled in automatically when you add the package. Do not add them manually.
 
 ---
 
@@ -64,7 +64,7 @@ If your target uses a static `Info.plist`, add the key directly:
 
 ## Privacy — Camera & Microphone
 
-The SDK requests camera and microphone access before placing a call. Add usage descriptions to your `Info.plist` or the system will deny access silently:
+The SDK requests microphone access before placing any call, and camera access before video (VRI) calls. Add usage descriptions to your `Info.plist` or the system will deny access silently:
 
 | Key | Example value |
 |---|---|
@@ -75,20 +75,20 @@ The SDK requests camera and microphone access before placing a call. Add usage d
 
 ## Background Modes
 
-Calls continue when the user presses the home button or switches apps. The SDK automatically starts Picture in Picture (PiP) when the app is backgrounded, keeping the interpreter's video visible as a floating window. When the user taps the PiP window, the call sheet restores exactly where it left off.
+Calls continue when the user presses the home button or switches apps. For video (VRI) calls the SDK automatically starts Picture in Picture (PiP) when the app is backgrounded, keeping the interpreter's video visible as a floating window; tapping the PiP window restores the call sheet exactly where it left off. For audio (OPI) calls the system green pill appears, and tapping it returns to the call UI.
 
-Your app must declare the **Audio, AirPlay, and Picture in Picture** background mode or iOS will suspend the audio session when the app backgrounds, silently dropping the call.
+Two background modes matter:
 
-In Xcode, go to your target's **Signing & Capabilities** tab, click **+ Capability**, and add **Background Modes**. Then check:
+- **Audio, AirPlay, and Picture in Picture** (`audio`) — **required**. Without it iOS suspends the audio session on backgrounding, silently dropping the call.
+- **Voice over IP** (`voip`) — **recommended for OPI**. With it, audio calls run through CallKit: they appear in the system call UI, survive backgrounding like phone calls, and support lock-screen mute/end. Without it the SDK automatically falls back to a direct in-app audio connection — calls still work but don't appear in the system call UI.
 
-- [x] Audio, AirPlay, and Picture in Picture
-
-Or add it directly to your `Info.plist`:
+In Xcode, go to your target's **Signing & Capabilities** tab, click **+ Capability**, add **Background Modes**, and check both. Or add them directly to your `Info.plist`:
 
 ```xml
 <key>UIBackgroundModes</key>
 <array>
     <string>audio</string>
+    <string>voip</string>
 </array>
 ```
 
@@ -96,7 +96,7 @@ Or add it directly to your `Info.plist`:
 
 ## Setup
 
-Create a single `MasterWordSDK` instance at the root of your app, inject it into the environment, and apply `.masterWordSheet(sdk:)` to your root view. The modifier handles all SDK UI presentation — the login card and call screen — automatically.
+Create a single `MasterWordSDK` instance at the root of your app, inject it into the environment, and apply `.masterWordSheet(sdk:)` to your root view. The modifier handles all SDK UI presentation automatically — the login card, the call screen, the post-call rating sheet, and the in-app "ongoing call" banner for minimized audio calls.
 
 ```swift
 import SwiftUI
@@ -161,18 +161,35 @@ masterWord.logout()
 
 ## Requesting an Interpreter
 
-`requestInterpreter(contextHandoff:language:)` is the single entry point. Call it from a button action or trigger it automatically from your AI pipeline.
+`requestInterpreter(type:contextHandoff:language:)` is the single entry point. Call it from a button action or trigger it automatically from your AI pipeline.
 
+- `type` selects the session kind: `.vri` (video) or `.opi` (audio-only phone interpreting).
 - If the user is not signed in, the login card appears automatically. Once they sign in, the call proceeds without requiring a second tap.
 - The `contextHandoff` string is sent to the interpreter the moment they connect, so they arrive with full context.
 - The SDK validates `language` against the languages available to the user before placing the call.
 
 ```swift
 await masterWord.requestInterpreter(
+    type: .vri,  // or .opi for audio-only
     contextHandoff: "User asked about billing dispute on account #4821. AI could not resolve. Escalating.",
     language: selectedLanguage  // UserLanguage from fetchAvailableLanguages()
 )
 ```
+
+### Session types
+
+| Type | Session | Active call UI |
+|---|---|---|
+| `.vri` | Two-way video via Twilio room | Full-screen video, PiP support, chat overlay, camera-off placeholders |
+| `.opi` | Audio-only voice call | Themed audio layout with always-visible chat and minimize |
+
+OPI calls integrate with **CallKit** when your app declares the **Voice over IP** background mode, so the call shows in the system call UI and survives backgrounding like a phone call. Without the VoIP entitlement the SDK automatically falls back to a direct in-app audio connection — no configuration required, but the call will not appear in the system call UI.
+
+Both session types display the interpreter's ID (e.g. "Interpreter 63461422") in the call UI once they connect — the same ID the interpreter announces verbally at session start for compliance. For CallKit-backed OPI calls it also appears in the system call UI and the Phone app's call history.
+
+### Minimizing a call
+
+The OPI call screen has a minimize button in the control bar (VRI uses Picture in Picture instead). Minimizing dismisses the SDK's call UI while the audio continues, returning the user to your app. While inside your app, the SDK shows a small green "Ongoing call" banner at the top of the screen — iOS only shows the system green pill once the app is backgrounded. Tapping either one returns to the call UI. `callState` stays `.active` throughout, and `showActiveCall()` is available if you need to re-present programmatically.
 
 ### Call state
 
@@ -184,8 +201,8 @@ await masterWord.requestInterpreter(
 | `.connecting` | Authenticating and opening the SignalR hub |
 | `.searching` | Waiting for an available interpreter |
 | `.ringing` | Interpreter found, call ringing |
-| `.accepted` | Interpreter accepted, connecting Twilio room |
-| `.active` | Video session live |
+| `.accepted` | Interpreter accepted, connecting call media |
+| `.active` | Session live |
 | `.ending` | Hang-up sent, waiting for confirmation |
 
 ```swift
@@ -220,6 +237,40 @@ Observe `requestError` to surface failures in your own UI:
 
 ---
 
+## Theming
+
+All SDK-presented UI — login, connecting, audio call, and rating — follows `MasterWordSDK.theme`. It defaults to `.light`; set it once at launch or bind it to your app's own appearance setting:
+
+```swift
+masterWord.theme = .dark    // .light (default) | .dark | .system
+```
+
+`.system` follows the device appearance. All call surfaces follow the theme, including the video call's controls and chat; the video feed itself is unaffected.
+
+---
+
+## Post-Call Rating
+
+After a call that reached the live session ends, the SDK presents a rating sheet: a 1–5 star rating with an optional feedback field. **Submit** posts the rating to MasterWord; **Dismiss** sends nothing at all. The star rating is required to submit — feedback text alone cannot be sent.
+
+The built-in sheet is on by default. To drive your own rating UI instead, disable it at init and use the public API:
+
+```swift
+@StateObject private var masterWord = MasterWordSDK(postCallRatingEnabled: false)
+
+// lastIntakeId becomes non-nil when a completed call ends — observe it to show your UI
+.onChange(of: masterWord.lastIntakeId) { _, intakeId in
+    if intakeId != nil { showMyRatingUI = true }
+}
+
+// Submit from your own UI. If the user dismisses, simply don't call this.
+try await masterWord.submitCallRating(4, notes: "Great interpreter")
+```
+
+`submitCallRating(_:notes:intakeId:)` defaults to the most recently completed call; pass `intakeId` explicitly to rate a specific session. Throws `TelemetryError.noCompletedCall` when there is no session to rate.
+
+---
+
 ## Language Selection
 
 To validate the session language before placing a call, fetch the languages available to the authenticated user and present them for selection.
@@ -242,6 +293,7 @@ Picker("Language", selection: $selectedLanguage) {
 // Pass the selection when requesting — disable the button until a language is chosen
 if let language = selectedLanguage {
     await masterWord.requestInterpreter(
+        type: .vri,
         contextHandoff: summary,
         language: language
     )
@@ -269,7 +321,7 @@ func escalateToInterpreter(detectedLanguage: String, summary: String) async {
     guard let language = availableLanguages.first(where: {
         $0.engName.localizedCaseInsensitiveCompare(detectedLanguage) == .orderedSame
     }) else { return }
-    await masterWord.requestInterpreter(contextHandoff: summary, language: language)
+    await masterWord.requestInterpreter(type: .vri, contextHandoff: summary, language: language)
 }
 ```
 
@@ -293,6 +345,7 @@ if let language = sessionLanguage {
     Button("Request Human Interpreter") {
         Task {
             await masterWord.requestInterpreter(
+                type: .vri,
                 contextHandoff: aiGeneratedSummary,
                 language: language
             )
@@ -307,7 +360,7 @@ The SDK handles everything else automatically:
 
 | Parameter | Value |
 |---|---|
-| Call type | Video (VRI) |
+| Call type | `.vri` (video) or `.opi` (audio) — required argument |
 | Gender preference | No preference |
 | Language ID | Resolved internally from the `UserLanguage` object |
 | Authentication | Login card shown automatically if the session expired |
@@ -332,6 +385,7 @@ Button("Test Call") {
         let languages = (try? await masterWord.fetchAvailableLanguages()) ?? []
         guard let zulu = languages.first(where: { $0.engName == "Zulu (test)" }) else { return }
         await masterWord.requestInterpreter(
+            type: .vri,
             contextHandoff: "Test call — SDK integration check.",
             language: zulu
         )
@@ -341,4 +395,25 @@ Button("Test Call") {
 ```
 
 Contact your MasterWord integration contact to schedule a test window so someone is available to answer.
+
+---
+
+## Migrating from 1.x
+
+**New in 2.0:**
+
+- **OPI (audio-only) sessions** via `requestInterpreter(type: .opi, ...)` — CallKit integration when the `voip` background mode is declared, with automatic in-app fallback when it isn't. Includes a minimize button, an in-app "ongoing call" banner, and automatic restore via the system green pill.
+- **Theming** via `MasterWordSDK.theme` (`.light` default, `.dark`, `.system`) applied to all SDK UI, including a dark-mode connecting animation.
+- **Post-call rating** — built-in star-rating sheet after completed calls, plus `lastIntakeId` and `submitCallRating(_:notes:intakeId:)` for host-driven rating UI.
+- **TwilioVoice** is now a package dependency alongside TwilioVideo (resolved automatically).
+
+**Breaking changes:**
+
+- `requestInterpreter(contextHandoff:language:)` now requires a leading `type:` argument — pass `.vri` for the previous behavior.
+- `VRICallState` and `VRIMessage` are renamed to `InterpreterCallState` and `InterpreterMessage`. Deprecated typealiases keep 1.x code compiling; update at your convenience.
+
+**Behavior changes:**
+
+- A post-call rating sheet appears after completed calls by default. Pass `postCallRatingEnabled: false` to the initializer to opt out.
+- SDK UI defaults to light mode as before, but now respects `theme` if you set it.
 
