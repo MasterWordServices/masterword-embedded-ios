@@ -19,8 +19,8 @@ let package = Package(
     targets: [
         .binaryTarget(
             name: "MasterWordEmbedded",
-            url: "https://github.com/MasterWordServices/masterword-embedded-ios/releases/download/v2.1.0/MasterWordEmbedded.xcframework.zip",
-            checksum: "99251ac1537c05031e7993d6cb1d949fcbb80ac4dc428de5b4c42dd5056d32e8"
+            url: "https://github.com/MasterWordServices/masterword-embedded-ios/releases/download/v2.1.1/MasterWordEmbedded.xcframework.zip",
+            checksum: "381e6d8a6a2fffb9d1bb2a5eb5e6a77b42418d9959f093f71776b0b97ff574ce"
         ),
         // Thin shim: importing these dynamic frameworks forces SPM to embed them into the
         // consuming app so dyld can resolve them at launch. The binary target links against
