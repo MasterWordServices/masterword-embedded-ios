@@ -271,6 +271,46 @@ try await masterWord.submitCallRating(4, notes: "Great interpreter")
 
 ---
 
+## Call Recording
+
+Recordings are **controlled by account permissions** — most accounts don't have them enabled, and requesting one on such an account throws `RecordingError.notPermitted`. When the account is enabled, a recording is captured automatically for completed calls.
+
+**Availability.** A recording is usually available within a few minutes of the call ending (`state` stays `.loading` until then). A call with no recording returns `RecordingError.notFound`.
+
+To retrieve a recording, use **`RecordingRetriever`** — an `ObservableObject` that fetches it for you. Call `requestRecording(intakeId:)` **once**, then render `state`. There's no built-in recording screen.
+
+```swift
+@StateObject private var recording = RecordingRetriever()
+
+Button("Get recording") { recording.requestRecording(intakeId: id) }
+    .disabled(recording.state == .loading)
+
+switch recording.state {
+case .idle:            EmptyView()
+case .loading:         ProgressView("Preparing…")   // retrieval in progress
+case .ready(let a, let v):
+    present(v ?? a)    // VRI → videoURL, OPI → audioURL
+case .stillProcessing: Text("Not ready yet — try again later.")
+case .notPermitted:    EmptyView()                  // account has no recording permission
+case .notFound:        Text("No recording found for that call.")
+case .failed:          Text("Couldn't retrieve the recording.")
+}
+```
+
+- **When to call it:** once, from a button. Disable the control while `state == .loading`. The recording may not be ready immediately — `.loading` can persist for several minutes while it's prepared, then the retriever resolves to a terminal state on its own. If it lands on `.stillProcessing`, just call `requestRecording` again later. Keep the app foregrounded while it's working.
+- **Which recording:** pass any `intakeId` — the most recent call is `masterWord.lastIntakeId`, or a specific past session's id from your own records.
+- **The URLs are short-lived (~30 min) — don't cache them.** The `intakeId` is the durable handle: call `requestRecording` again for a fresh link rather than storing the URL, and keep those links out of logs and analytics.
+
+### What the SDK stores, and what you own
+
+The SDK does **not** keep a call history or persist recordings — that's the host app's responsibility. Knowing the split keeps the integration predictable:
+
+- **The SDK remembers one id, briefly.** `masterWord.lastIntakeId` holds the intake id of the **most recent** call, in memory only. It's cleared when the app relaunches, and each new call overwrites it. It exists so you can fetch the recording (or submit a rating) for the call the user *just* finished, without tracking anything yourself.
+- **To fetch a recording later, store the id yourself.** For any call beyond the current session's most recent, you need its `intakeId` — so capture and persist it. Observe `lastIntakeId`; when it becomes non-`nil` a call has just completed, and you can save that id in your own store alongside whatever metadata you need (date, language, service type, your own encounter reference). The SDK surfaces no other lookup.
+- **The recording itself lives server-side; the `intakeId` is the key.** You don't have to download or store the media. Keep the `intakeId` and call `requestRecording` whenever you need it — a fresh, playable URL comes back each time. Download and retain your own copy only if you specifically need offline access or your own retained copy.
+
+---
+
 ## Language Selection
 
 To validate the session language before placing a call, fetch the languages available to the authenticated user and present them for selection.
